@@ -1,0 +1,283 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# -----------------------------------------
+# Marketing Campaign Environment
+# -----------------------------------------
+
+num_campaigns = 5
+
+# True probability of success for each campaign
+true_probabilities = [0.10, 0.30, 0.50, 0.40, 0.70]
+
+num_steps = 1000
+num_runs = 50
+
+epsilon = 0.1
+
+
+# -----------------------------------------
+# Epsilon-Greedy Algorithm
+# -----------------------------------------
+
+def epsilon_greedy():
+
+    rewards = np.zeros(num_steps)
+
+    estimated_rewards = np.zeros(num_campaigns)
+    counts = np.zeros(num_campaigns)
+
+    for t in range(num_steps):
+
+        # Exploration
+        if np.random.random() < epsilon:
+            campaign = np.random.randint(num_campaigns)
+
+        # Exploitation
+        else:
+            campaign = np.argmax(estimated_rewards)
+
+        # Generate customer response
+        reward = int(
+            np.random.random() < true_probabilities[campaign]
+        )
+
+        counts[campaign] += 1
+
+        # Incremental average update
+        estimated_rewards[campaign] += (
+            reward - estimated_rewards[campaign]
+        ) / counts[campaign]
+
+        rewards[t] = reward
+
+    return rewards
+
+
+# -----------------------------------------
+# UCB Algorithm
+# -----------------------------------------
+
+def ucb():
+
+    rewards = np.zeros(num_steps)
+
+    total_rewards = np.zeros(num_campaigns)
+    counts = np.zeros(num_campaigns)
+
+    for t in range(num_steps):
+
+        # Select each campaign once initially
+        if t < num_campaigns:
+            campaign = t
+
+        else:
+            ucb_values = np.zeros(num_campaigns)
+
+            for i in range(num_campaigns):
+
+                average_reward = (
+                    total_rewards[i] / counts[i]
+                )
+
+                confidence = np.sqrt(
+                    (2 * np.log(t + 1)) / counts[i]
+                )
+
+                ucb_values[i] = (
+                    average_reward + confidence
+                )
+
+            campaign = np.argmax(ucb_values)
+
+        # Customer response
+        reward = int(
+            np.random.random() < true_probabilities[campaign]
+        )
+
+        counts[campaign] += 1
+        total_rewards[campaign] += reward
+
+        rewards[t] = reward
+
+    return rewards
+
+
+# -----------------------------------------
+# Thompson Sampling
+# -----------------------------------------
+
+def thompson_sampling():
+
+    rewards = np.zeros(num_steps)
+
+    # Beta distribution parameters
+    successes = np.ones(num_campaigns)
+    failures = np.ones(num_campaigns)
+
+    for t in range(num_steps):
+
+        # Sample success probability for each campaign
+        sampled_probabilities = np.random.beta(
+            successes,
+            failures
+        )
+
+        # Select campaign with highest sampled probability
+        campaign = np.argmax(sampled_probabilities)
+
+        # Customer response
+        reward = int(
+            np.random.random() < true_probabilities[campaign]
+        )
+
+        # Update Beta distribution
+        if reward == 1:
+            successes[campaign] += 1
+        else:
+            failures[campaign] += 1
+
+        rewards[t] = reward
+
+    return rewards
+
+
+# -----------------------------------------
+# Run Multiple Simulations
+# -----------------------------------------
+
+epsilon_results = np.zeros(
+    (num_runs, num_steps)
+)
+
+ucb_results = np.zeros(
+    (num_runs, num_steps)
+)
+
+thompson_results = np.zeros(
+    (num_runs, num_steps)
+)
+
+
+for run in range(num_runs):
+
+    epsilon_results[run] = epsilon_greedy()
+
+    ucb_results[run] = ucb()
+
+    thompson_results[run] = thompson_sampling()
+
+
+# -----------------------------------------
+# Calculate Average Rewards
+# -----------------------------------------
+
+epsilon_average = np.mean(
+    epsilon_results, axis=0
+)
+
+ucb_average = np.mean(
+    ucb_results, axis=0
+)
+
+thompson_average = np.mean(
+    thompson_results, axis=0
+)
+
+
+# -----------------------------------------
+# Calculate Cumulative Rewards
+# -----------------------------------------
+
+epsilon_cumulative = np.cumsum(
+    epsilon_average
+)
+
+ucb_cumulative = np.cumsum(
+    ucb_average
+)
+
+thompson_cumulative = np.cumsum(
+    thompson_average
+)
+
+
+# -----------------------------------------
+# Display Results
+# -----------------------------------------
+
+print("Marketing Campaign Success Probabilities:")
+
+for i, probability in enumerate(true_probabilities):
+    print(
+        f"Campaign {i + 1}: {probability}"
+    )
+
+print("\nAverage Reward:")
+
+print(
+    "Epsilon-Greedy:",
+    round(np.mean(epsilon_results), 4)
+)
+
+print(
+    "UCB:",
+    round(np.mean(ucb_results), 4)
+)
+
+print(
+    "Thompson Sampling:",
+    round(np.mean(thompson_results), 4)
+)
+
+
+print("\nCumulative Reward:")
+
+print(
+    "Epsilon-Greedy:",
+    round(epsilon_cumulative[-1], 2)
+)
+
+print(
+    "UCB:",
+    round(ucb_cumulative[-1], 2)
+)
+
+print(
+    "Thompson Sampling:",
+    round(thompson_cumulative[-1], 2)
+)
+
+
+# -----------------------------------------
+# Plot Performance
+# -----------------------------------------
+
+plt.figure(figsize=(10, 6))
+
+plt.plot(
+    epsilon_cumulative,
+    label="Epsilon-Greedy"
+)
+
+plt.plot(
+    ucb_cumulative,
+    label="UCB"
+)
+
+plt.plot(
+    thompson_cumulative,
+    label="Thompson Sampling"
+)
+
+plt.xlabel("Marketing Decision Step")
+plt.ylabel("Cumulative Reward")
+
+plt.title(
+    "k-Armed Bandit: Marketing Campaign Optimization"
+)
+
+plt.legend()
+plt.grid(True)
+
+plt.show()
