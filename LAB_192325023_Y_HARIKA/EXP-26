@@ -1,0 +1,625 @@
+26) Develop a recommendation system for a streaming service to suggest movies based on user feedback, implemented as an MDP and trained using a Deep Deterministic Policy Gradient (DDPG) algorithm
+
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import random
+from collections import deque
+
+# =====================================================
+# Movie Recommendation Environment
+# =====================================================
+
+class MovieRecommendationEnv:
+
+    def __init__(self):
+
+        # Movie database
+        self.movies = [
+            "Action Movie",
+            "Comedy Movie",
+            "Drama Movie",
+            "Sci-Fi Movie",
+            "Romance Movie"
+        ]
+
+        # Genre preference vector for each movie
+        self.movie_features = np.array([
+            [1, 0, 0, 0, 0],  # Action
+            [0, 1, 0, 0, 0],  # Comedy
+            [0, 0, 1, 0, 0],  # Drama
+            [0, 0, 0, 1, 0],  # Sci-Fi
+            [0, 0, 0, 0, 1]   # Romance
+        ], dtype=np.float32)
+
+        # Initial user preferences
+        self.user_preferences = np.array(
+            [0.5, 0.5, 0.5, 0.5, 0.5],
+            dtype=np.float32
+        )
+
+        self.state = self.user_preferences.copy()
+
+
+    # -------------------------------------------------
+    # Reset
+    # -------------------------------------------------
+
+    def reset(self):
+
+        self.user_preferences = np.random.uniform(
+            0.2,
+            0.8,
+            5
+        ).astype(np.float32)
+
+        self.state = self.user_preferences.copy()
+
+        return self.state
+
+
+    # -------------------------------------------------
+    # Select Movie
+    # -------------------------------------------------
+
+    def select_movie(self, action):
+
+        # Find movie closest to actor output
+        distances = np.linalg.norm(
+            self.movie_features - action,
+            axis=1
+        )
+
+        movie_index = np.argmin(distances)
+
+        return movie_index
+
+
+    # -------------------------------------------------
+    # Environment Step
+    # -------------------------------------------------
+
+    def step(self, action):
+
+        # Select movie
+        movie_index = self.select_movie(action)
+
+        movie_features = self.movie_features[
+            movie_index
+        ]
+
+        # Calculate user satisfaction
+        satisfaction = np.dot(
+            self.user_preferences,
+            movie_features
+        )
+
+        # Normalize satisfaction
+        satisfaction = satisfaction / 1.0
+
+        # Add randomness to feedback
+        reward = satisfaction + np.random.normal(
+            0,
+            0.05
+        )
+
+        # Clip reward
+        reward = np.clip(
+            reward,
+            -1,
+            1
+        )
+
+        # Update user preference
+        self.user_preferences = (
+            0.9 * self.user_preferences
+            + 0.1 * movie_features
+        )
+
+        self.state = self.user_preferences.copy()
+
+        return (
+            self.state,
+            float(reward),
+            movie_index
+        )
+
+
+# =====================================================
+# Actor Network
+# =====================================================
+
+class Actor(nn.Module):
+
+    def __init__(
+        self,
+        state_dim,
+        action_dim
+    ):
+
+        super().__init__()
+
+        self.network = nn.Sequential(
+
+            nn.Linear(
+                state_dim,
+                128
+            ),
+
+            nn.ReLU(),
+
+            nn.Linear(
+                128,
+                128
+            ),
+
+            nn.ReLU(),
+
+            nn.Linear(
+                128,
+                action_dim
+            ),
+
+            nn.Sigmoid()
+        )
+
+
+    def forward(self, state):
+
+        return self.network(state)
+
+
+# =====================================================
+# Critic Network
+# =====================================================
+
+class Critic(nn.Module):
+
+    def __init__(
+        self,
+        state_dim,
+        action_dim
+    ):
+
+        super().__init__()
+
+        self.network = nn.Sequential(
+
+            nn.Linear(
+                state_dim + action_dim,
+                128
+            ),
+
+            nn.ReLU(),
+
+            nn.Linear(
+                128,
+                128
+            ),
+
+            nn.ReLU(),
+
+            nn.Linear(
+                128,
+                1
+            )
+        )
+
+
+    def forward(
+        self,
+        state,
+        action
+    ):
+
+        x = torch.cat(
+            [state, action],
+            dim=1
+        )
+
+        return self.network(x)
+
+
+# =====================================================
+# Replay Buffer
+# =====================================================
+
+class ReplayBuffer:
+
+    def __init__(self, capacity=10000):
+
+        self.buffer = deque(
+            maxlen=capacity
+        )
+
+
+    def add(
+        self,
+        state,
+        action,
+        reward,
+        next_state
+    ):
+
+        self.buffer.append(
+            (
+                state,
+                action,
+                reward,
+                next_state
+            )
+        )
+
+
+    def sample(self, batch_size):
+
+        batch = random.sample(
+            self.buffer,
+            batch_size
+        )
+
+        states, actions, rewards, next_states = zip(
+            *batch
+        )
+
+        return (
+            np.array(states),
+            np.array(actions),
+            np.array(rewards),
+            np.array(next_states)
+        )
+
+
+    def __len__(self):
+
+        return len(self.buffer)
+
+
+# =====================================================
+# DDPG Agent
+# =====================================================
+
+class DDPGAgent:
+
+    def __init__(
+        self,
+        state_dim,
+        action_dim
+    ):
+
+        self.actor = Actor(
+            state_dim,
+            action_dim
+        )
+
+        self.actor_target = Actor(
+            state_dim,
+            action_dim
+        )
+
+        self.critic = Critic(
+            state_dim,
+            action_dim
+        )
+
+        self.critic_target = Critic(
+            state_dim,
+            action_dim
+        )
+
+        # Copy initial weights
+        self.actor_target.load_state_dict(
+            self.actor.state_dict()
+        )
+
+        self.critic_target.load_state_dict(
+            self.critic.state_dict()
+        )
+
+        self.actor_optimizer = optim.Adam(
+            self.actor.parameters(),
+            lr=0.001
+        )
+
+        self.critic_optimizer = optim.Adam(
+            self.critic.parameters(),
+            lr=0.001
+        )
+
+        self.gamma = 0.99
+        self.tau = 0.005
+
+        self.replay_buffer = ReplayBuffer()
+
+
+    # -------------------------------------------------
+    # Select Action
+    # -------------------------------------------------
+
+    def select_action(
+        self,
+        state,
+        noise=0.1
+    ):
+
+        state_tensor = torch.FloatTensor(
+            state
+        ).unsqueeze(0)
+
+        with torch.no_grad():
+
+            action = self.actor(
+                state_tensor
+            ).numpy()[0]
+
+        # Exploration noise
+        action += np.random.normal(
+            0,
+            noise,
+            size=len(action)
+        )
+
+        action = np.clip(
+            action,
+            0,
+            1
+        )
+
+        return action
+
+
+    # -------------------------------------------------
+    # Update Agent
+    # -------------------------------------------------
+
+    def train(
+        self,
+        batch_size=64
+    ):
+
+        if len(self.replay_buffer) < batch_size:
+
+            return
+
+
+        (
+            states,
+            actions,
+            rewards,
+            next_states
+        ) = self.replay_buffer.sample(
+            batch_size
+        )
+
+
+        states = torch.FloatTensor(
+            states
+        )
+
+        actions = torch.FloatTensor(
+            actions
+        )
+
+        rewards = torch.FloatTensor(
+            rewards
+        ).unsqueeze(1)
+
+        next_states = torch.FloatTensor(
+            next_states
+        )
+
+
+        # -----------------------------------------
+        # Critic Update
+        # -----------------------------------------
+
+        with torch.no_grad():
+
+            next_actions = self.actor_target(
+                next_states
+            )
+
+            target_Q = self.critic_target(
+                next_states,
+                next_actions
+            )
+
+            target_Q = (
+                rewards
+                + self.gamma * target_Q
+            )
+
+
+        current_Q = self.critic(
+            states,
+            actions
+        )
+
+
+        critic_loss = nn.MSELoss()(
+            current_Q,
+            target_Q
+        )
+
+
+        self.critic_optimizer.zero_grad()
+
+        critic_loss.backward()
+
+        self.critic_optimizer.step()
+
+
+        # -----------------------------------------
+        # Actor Update
+        # -----------------------------------------
+
+        predicted_actions = self.actor(
+            states
+        )
+
+        actor_loss = -self.critic(
+            states,
+            predicted_actions
+        ).mean()
+
+
+        self.actor_optimizer.zero_grad()
+
+        actor_loss.backward()
+
+        self.actor_optimizer.step()
+
+
+        # -----------------------------------------
+        # Soft Target Updates
+        # -----------------------------------------
+
+        for target_param, param in zip(
+            self.actor_target.parameters(),
+            self.actor.parameters()
+        ):
+
+            target_param.data.copy_(
+                self.tau * param.data
+                + (1 - self.tau)
+                * target_param.data
+            )
+
+
+        for target_param, param in zip(
+            self.critic_target.parameters(),
+            self.critic.parameters()
+        ):
+
+            target_param.data.copy_(
+                self.tau * param.data
+                + (1 - self.tau)
+                * target_param.data
+            )
+
+
+# =====================================================
+# Training
+# =====================================================
+
+env = MovieRecommendationEnv()
+
+agent = DDPGAgent(
+    state_dim=5,
+    action_dim=5
+)
+
+episodes = 200
+steps_per_episode = 20
+
+reward_history = []
+
+
+for episode in range(episodes):
+
+    state = env.reset()
+
+    total_reward = 0
+
+    # Gradually reduce exploration
+    noise = max(
+        0.05,
+        0.3 * (1 - episode / episodes)
+    )
+
+
+    for step in range(
+        steps_per_episode
+    ):
+
+        # Actor chooses recommendation action
+        action = agent.select_action(
+            state,
+            noise
+        )
+
+        # Environment provides feedback
+        next_state, reward, movie_index = env.step(
+            action
+        )
+
+        # Store experience
+        agent.replay_buffer.add(
+            state,
+            action,
+            reward,
+            next_state
+        )
+
+        # Train DDPG
+        agent.train()
+
+        state = next_state
+
+        total_reward += reward
+
+
+    reward_history.append(
+        total_reward
+    )
+
+
+    if (episode + 1) % 20 == 0:
+
+        print(
+            f"Episode {episode + 1}, "
+            f"Reward: {total_reward:.2f}"
+        )
+
+
+# =====================================================
+# Test Recommendation System
+# =====================================================
+
+print("\nFinal Recommendations")
+print("----------------------")
+
+state = env.reset()
+
+for i in range(10):
+
+    action = agent.select_action(
+        state,
+        noise=0
+    )
+
+    next_state, reward, movie_index = env.step(
+        action
+    )
+
+    print(
+        f"Step {i + 1}: "
+        f"{env.movies[movie_index]} | "
+        f"Reward: {reward:.2f}"
+    )
+
+    state = next_state
+
+
+# =====================================================
+# Plot Training Performance
+# =====================================================
+
+plt.figure(figsize=(10, 5))
+
+plt.plot(
+    reward_history
+)
+
+plt.xlabel("Episode")
+
+plt.ylabel("Total Reward")
+
+plt.title(
+    "DDPG Movie Recommendation Training Performance"
+)
+
+plt.grid(True)
+
+plt.show()
