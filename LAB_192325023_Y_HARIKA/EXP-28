@@ -1,0 +1,246 @@
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
+
+# ----------------------------------
+# RTS Environment
+# ----------------------------------
+
+class RTSEnv:
+
+    def reset(self):
+
+        self.resources = 10
+        self.workers = 3
+        self.army = 1
+        self.buildings = 1
+        self.enemy = 5
+
+        return self.state()
+
+    def state(self):
+
+        return np.array([
+            self.resources / 100,
+            self.workers / 20,
+            self.army / 20,
+            self.buildings / 10,
+            self.enemy / 20
+        ], dtype=np.float32)
+
+    def step(self, action):
+
+        reward = -0.1
+
+        if action == 0:
+
+            self.resources += self.workers
+            reward += 1
+
+        elif action == 1:
+
+            if self.resources >= 10:
+
+                self.resources -= 10
+                self.buildings += 1
+                reward += 3
+
+            else:
+
+                reward -= 2
+
+        elif action == 2:
+
+            if self.resources >= 5:
+
+                self.resources -= 5
+                self.army += 1
+                reward += 2
+
+            else:
+
+                reward -= 2
+
+        elif action == 3:
+
+            if self.army > self.enemy:
+
+                reward += 5
+                self.enemy = 0
+
+            else:
+
+                self.army = max(
+                    0,
+                    self.army - 1
+                )
+
+                reward -= 2
+
+        elif action == 4:
+
+            reward += 0.5
+
+        done = self.enemy == 0
+
+        if done:
+
+            reward += 20
+
+        return (
+            self.state(),
+            reward,
+            done
+        )
+
+
+# ----------------------------------
+# Actor-Critic Network
+# ----------------------------------
+
+class ActorCritic(nn.Module):
+
+    def __init__(self):
+
+        super().__init__()
+
+        self.shared = nn.Sequential(
+            nn.Linear(5, 128),
+            nn.ReLU()
+        )
+
+        self.actor = nn.Linear(
+            128,
+            5
+        )
+
+        self.critic = nn.Linear(
+            128,
+            1
+        )
+
+    def forward(self, state):
+
+        x = self.shared(state)
+
+        return (
+            torch.softmax(
+                self.actor(x),
+                dim=-1
+            ),
+            self.critic(x)
+        )
+
+
+# ----------------------------------
+# Training
+# ----------------------------------
+
+env = RTSEnv()
+
+model = ActorCritic()
+
+optimizer = optim.Adam(
+    model.parameters(),
+    lr=0.001
+)
+
+gamma = 0.99
+
+for episode in range(1000):
+
+    state = env.reset()
+
+    log_probs = []
+    values = []
+    rewards = []
+
+    for step in range(100):
+
+        state_tensor = torch.FloatTensor(
+            state
+        ).unsqueeze(0)
+
+        probabilities, value = model(
+            state_tensor
+        )
+
+        distribution = torch.distributions.Categorical(
+            probabilities
+        )
+
+        action = distribution.sample()
+
+        next_state, reward, done = env.step(
+            action.item()
+        )
+
+        log_probs.append(
+            distribution.log_prob(action)
+        )
+
+        values.append(
+            value.squeeze()
+        )
+
+        rewards.append(reward)
+
+        state = next_state
+
+        if done:
+            break
+
+
+    # Calculate discounted returns
+    returns = []
+
+    G = 0
+
+    for reward in reversed(rewards):
+
+        G = reward + gamma * G
+
+        returns.insert(
+            0,
+            G
+        )
+
+    returns = torch.FloatTensor(
+        returns
+    )
+
+    values = torch.stack(values)
+
+    advantages = (
+        returns - values.detach()
+    )
+
+    actor_loss = -(
+        torch.stack(log_probs)
+        * advantages
+    ).mean()
+
+    critic_loss = (
+        returns - values
+    ).pow(2).mean()
+
+    loss = (
+        actor_loss
+        + 0.5 * critic_loss
+    )
+
+    optimizer.zero_grad()
+
+    loss.backward()
+
+    optimizer.step()
+
+
+    if (episode + 1) % 100 == 0:
+
+        print(
+            f"Episode {episode + 1}, "
+            f"Reward: {sum(rewards):.2f}"
+        )
