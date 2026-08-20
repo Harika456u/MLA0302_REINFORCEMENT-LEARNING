@@ -1,0 +1,215 @@
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
+
+# -----------------------------
+# Portfolio Environment
+# -----------------------------
+
+class PortfolioEnv:
+
+    def __init__(self):
+
+        self.num_stocks = 3
+        self.reset()
+
+    def reset(self):
+
+        self.prices = np.array(
+            [100.0, 120.0, 80.0]
+        )
+
+        self.portfolio = 10000.0
+
+        return self._get_state()
+
+    def _get_state(self):
+
+        return np.concatenate([
+            self.prices / 100,
+            [self.portfolio / 10000]
+        ]).astype(np.float32)
+
+    def step(self, action):
+
+        # Convert action into portfolio weights
+        weights = np.exp(action)
+        weights = weights / np.sum(weights)
+
+        # Simulated market returns
+        returns = np.random.normal(
+            0.001,
+            0.02,
+            self.num_stocks
+        )
+
+        portfolio_return = np.dot(
+            weights,
+            returns
+        )
+
+        # Risk = volatility approximation
+        risk = np.std(returns)
+
+        # Reward = return - risk penalty
+        reward = (
+            portfolio_return
+            - 0.5 * risk
+        )
+
+        self.portfolio *= (
+            1 + portfolio_return
+        )
+
+        self.prices *= (
+            1 + returns
+        )
+
+        return self._get_state(), reward
+
+
+# -----------------------------
+# Actor-Critic Network
+# -----------------------------
+
+class ActorCritic(nn.Module):
+
+    def __init__(self):
+
+        super().__init__()
+
+        self.shared = nn.Sequential(
+            nn.Linear(4, 128),
+            nn.ReLU(),
+            nn.Linear(128, 128),
+            nn.ReLU()
+        )
+
+        self.actor = nn.Linear(
+            128,
+            3
+        )
+
+        self.critic = nn.Linear(
+            128,
+            1
+        )
+
+    def forward(self, state):
+
+        x = self.shared(state)
+
+        action = self.actor(x)
+
+        value = self.critic(x)
+
+        return action, value
+
+
+# -----------------------------
+# A3C-style Training
+# -----------------------------
+
+env = PortfolioEnv()
+
+model = ActorCritic()
+
+optimizer = optim.Adam(
+    model.parameters(),
+    lr=0.001
+)
+
+gamma = 0.99
+
+episodes = 500
+
+
+for episode in range(episodes):
+
+    state = env.reset()
+
+    log_probs = []
+    values = []
+    rewards = []
+
+    for step in range(50):
+
+        state_tensor = torch.FloatTensor(
+            state
+        ).unsqueeze(0)
+
+        action_logits, value = model(
+            state_tensor
+        )
+
+        distribution = torch.distributions.Normal(
+            action_logits,
+            torch.ones_like(action_logits) * 0.5
+        )
+
+        action = distribution.sample()
+
+        log_prob = distribution.log_prob(
+            action
+        ).sum()
+
+        next_state, reward = env.step(
+            action.detach().numpy()[0]
+        )
+
+        log_probs.append(log_prob)
+        values.append(value.squeeze())
+        rewards.append(reward)
+
+        state = next_state
+
+
+    # Calculate discounted returns
+    returns = []
+
+    G = 0
+
+    for reward in reversed(rewards):
+
+        G = reward + gamma * G
+
+        returns.insert(0, G)
+
+    returns = torch.FloatTensor(returns)
+
+    values = torch.stack(values)
+    log_probs = torch.stack(log_probs)
+
+    advantages = (
+        returns - values.detach()
+    )
+
+    actor_loss = -(
+        log_probs * advantages
+    ).mean()
+
+    critic_loss = (
+        returns - values
+    ).pow(2).mean()
+
+    loss = (
+        actor_loss
+        + 0.5 * critic_loss
+    )
+
+    optimizer.zero_grad()
+
+    loss.backward()
+
+    optimizer.step()
+
+
+    if (episode + 1) % 50 == 0:
+
+        print(
+            f"Episode {episode + 1}, "
+            f"Portfolio Value: "
+            f"{env.portfolio:.2f}"
+        )
