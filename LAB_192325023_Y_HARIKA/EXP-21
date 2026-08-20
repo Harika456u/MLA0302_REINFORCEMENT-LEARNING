@@ -1,0 +1,196 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Number of content options
+num_contents = 5
+
+# True probability of user engagement for each content
+true_rewards = [0.20, 0.50, 0.80, 0.40, 0.60]
+
+# Simulation parameters
+num_steps = 1000
+num_runs = 50
+
+
+# --------------------------------------------------
+# UCB Algorithm
+# --------------------------------------------------
+
+def ucb_algorithm():
+    rewards = np.zeros(num_steps)
+
+    # Total reward obtained from each content
+    total_rewards = np.zeros(num_contents)
+
+    # Number of times each content was selected
+    counts = np.zeros(num_contents)
+
+    for t in range(num_steps):
+
+        # Select each content once initially
+        if t < num_contents:
+            selected = t
+
+        else:
+            ucb_values = np.zeros(num_contents)
+
+            for i in range(num_contents):
+
+                average_reward = total_rewards[i] / counts[i]
+
+                confidence = np.sqrt(
+                    (2 * np.log(t + 1)) / counts[i]
+                )
+
+                ucb_values[i] = average_reward + confidence
+
+            selected = np.argmax(ucb_values)
+
+        # Simulate user engagement
+        reward = int(
+            np.random.random() < true_rewards[selected]
+        )
+
+        # Update statistics
+        counts[selected] += 1
+        total_rewards[selected] += reward
+
+        rewards[t] = reward
+
+    return rewards
+
+
+# --------------------------------------------------
+# Random Strategy
+# --------------------------------------------------
+
+def random_strategy():
+    rewards = np.zeros(num_steps)
+
+    for t in range(num_steps):
+
+        selected = np.random.randint(num_contents)
+
+        reward = int(
+            np.random.random() < true_rewards[selected]
+        )
+
+        rewards[t] = reward
+
+    return rewards
+
+
+# --------------------------------------------------
+# Greedy Strategy
+# --------------------------------------------------
+
+def greedy_strategy():
+    rewards = np.zeros(num_steps)
+
+    total_rewards = np.zeros(num_contents)
+    counts = np.zeros(num_contents)
+
+    for t in range(num_steps):
+
+        # Select each content once
+        if t < num_contents:
+            selected = t
+
+        else:
+            average_rewards = total_rewards / counts
+            selected = np.argmax(average_rewards)
+
+        reward = int(
+            np.random.random() < true_rewards[selected]
+        )
+
+        counts[selected] += 1
+        total_rewards[selected] += reward
+
+        rewards[t] = reward
+
+    return rewards
+
+
+# --------------------------------------------------
+# Run Multiple Simulations
+# --------------------------------------------------
+
+ucb_results = np.zeros((num_runs, num_steps))
+random_results = np.zeros((num_runs, num_steps))
+greedy_results = np.zeros((num_runs, num_steps))
+
+for run in range(num_runs):
+
+    ucb_results[run] = ucb_algorithm()
+
+    random_results[run] = random_strategy()
+
+    greedy_results[run] = greedy_strategy()
+
+
+# --------------------------------------------------
+# Calculate Average Performance
+# --------------------------------------------------
+
+ucb_average = np.mean(ucb_results, axis=0)
+random_average = np.mean(random_results, axis=0)
+greedy_average = np.mean(greedy_results, axis=0)
+
+# Cumulative rewards
+ucb_cumulative = np.cumsum(ucb_average)
+random_cumulative = np.cumsum(random_average)
+greedy_cumulative = np.cumsum(greedy_average)
+
+
+# --------------------------------------------------
+# Display Results
+# --------------------------------------------------
+
+print("True Engagement Probabilities:")
+for i, reward in enumerate(true_rewards):
+    print(f"Content {i + 1}: {reward}")
+
+print("\nAverage Reward:")
+print("UCB:    ", round(np.mean(ucb_results), 4))
+print("Greedy: ", round(np.mean(greedy_results), 4))
+print("Random: ", round(np.mean(random_results), 4))
+
+print("\nCumulative Reward:")
+print("UCB:    ", round(ucb_cumulative[-1], 2))
+print("Greedy: ", round(greedy_cumulative[-1], 2))
+print("Random: ", round(random_cumulative[-1], 2))
+
+
+# --------------------------------------------------
+# Plot Comparison
+# --------------------------------------------------
+
+plt.figure(figsize=(10, 6))
+
+plt.plot(
+    ucb_cumulative,
+    label="UCB"
+)
+
+plt.plot(
+    greedy_cumulative,
+    label="Greedy"
+)
+
+plt.plot(
+    random_cumulative,
+    label="Random"
+)
+
+plt.xlabel("Recommendation Step")
+plt.ylabel("Cumulative Reward")
+
+plt.title(
+    "UCB vs Greedy vs Random Content Recommendation"
+)
+
+plt.legend()
+plt.grid(True)
+
+plt.show()
