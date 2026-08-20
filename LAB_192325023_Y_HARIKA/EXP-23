@@ -1,0 +1,271 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# -----------------------------------------
+# Gridworld Configuration
+# -----------------------------------------
+
+ROWS = 4
+COLS = 4
+
+START = (0, 0)
+GOAL = (0, 3)
+BAD_STATE = (3, 0)
+BLOCKED = (1, 1)
+
+GAMMA = 0.9
+THETA = 0.0001
+
+ACTIONS = {
+    "U": (-1, 0),
+    "D": (1, 0),
+    "L": (0, -1),
+    "R": (0, 1)
+}
+
+# -----------------------------------------
+# Get Next State
+# -----------------------------------------
+
+def get_next_state(state, action):
+
+    dr, dc = ACTIONS[action]
+
+    new_r = state[0] + dr
+    new_c = state[1] + dc
+
+    # Check boundaries
+    if new_r < 0 or new_r >= ROWS:
+        return state
+
+    if new_c < 0 or new_c >= COLS:
+        return state
+
+    # Check blocked cell
+    if (new_r, new_c) == BLOCKED:
+        return state
+
+    return (new_r, new_c)
+
+
+# -----------------------------------------
+# Reward Function
+# -----------------------------------------
+
+def get_reward(next_state):
+
+    if next_state == GOAL:
+        return 1
+
+    if next_state == BAD_STATE:
+        return -1
+
+    return 0
+
+
+# -----------------------------------------
+# Policy 1: Random Policy
+# -----------------------------------------
+
+def random_policy(state):
+
+    valid_actions = []
+
+    for action in ACTIONS:
+
+        next_state = get_next_state(state, action)
+
+        if next_state != state:
+            valid_actions.append(action)
+
+    if len(valid_actions) == 0:
+        return "U"
+
+    return np.random.choice(valid_actions)
+
+
+# -----------------------------------------
+# Policy 2: Goal-Directed Policy
+# -----------------------------------------
+
+def goal_directed_policy(state):
+
+    best_action = None
+    best_distance = float("inf")
+
+    for action in ACTIONS:
+
+        next_state = get_next_state(state, action)
+
+        # Ignore actions that don't move
+        if next_state == state:
+            continue
+
+        distance = abs(next_state[0] - GOAL[0]) + \
+                   abs(next_state[1] - GOAL[1])
+
+        if distance < best_distance:
+
+            best_distance = distance
+            best_action = action
+
+    return best_action
+
+
+# -----------------------------------------
+# Policy Evaluation
+# -----------------------------------------
+
+def evaluate_policy(policy):
+
+    V = np.zeros((ROWS, COLS))
+
+    while True:
+
+        delta = 0
+
+        for r in range(ROWS):
+
+            for c in range(COLS):
+
+                state = (r, c)
+
+                # Skip terminal and blocked states
+                if state == GOAL or \
+                   state == BAD_STATE or \
+                   state == BLOCKED:
+                    continue
+
+                action = policy(state)
+
+                next_state = get_next_state(
+                    state,
+                    action
+                )
+
+                reward = get_reward(next_state)
+
+                new_value = reward + \
+                    GAMMA * V[next_state]
+
+                delta = max(
+                    delta,
+                    abs(new_value - V[state])
+                )
+
+                V[state] = new_value
+
+        if delta < THETA:
+            break
+
+    return V
+
+
+# -----------------------------------------
+# Evaluate Both Policies
+# -----------------------------------------
+
+random_values = evaluate_policy(
+    random_policy
+)
+
+goal_values = evaluate_policy(
+    goal_directed_policy
+)
+
+
+# -----------------------------------------
+# Display Value Functions
+# -----------------------------------------
+
+np.set_printoptions(precision=2)
+
+print("\nValue Function - Random Policy")
+print(random_values)
+
+print("\nValue Function - Goal-Directed Policy")
+print(goal_values)
+
+
+# -----------------------------------------
+# Visualization
+# -----------------------------------------
+
+fig, axes = plt.subplots(
+    1, 2,
+    figsize=(12, 5)
+)
+
+
+# Random Policy
+im1 = axes[0].imshow(
+    random_values,
+    cmap="viridis"
+)
+
+axes[0].set_title(
+    "Value Function - Random Policy"
+)
+
+for r in range(ROWS):
+
+    for c in range(COLS):
+
+        if (r, c) == BLOCKED:
+
+            axes[0].text(
+                c,
+                r,
+                "BLOCK",
+                ha="center",
+                va="center"
+            )
+
+        else:
+
+            axes[0].text(
+                c,
+                r,
+                f"{random_values[r,c]:.2f}",
+                ha="center",
+                va="center"
+            )
+
+
+# Goal Directed Policy
+im2 = axes[1].imshow(
+    goal_values,
+    cmap="viridis"
+)
+
+axes[1].set_title(
+    "Value Function - Goal-Directed Policy"
+)
+
+for r in range(ROWS):
+
+    for c in range(COLS):
+
+        if (r, c) == BLOCKED:
+
+            axes[1].text(
+                c,
+                r,
+                "BLOCK",
+                ha="center",
+                va="center"
+            )
+
+        else:
+
+            axes[1].text(
+                c,
+                r,
+                f"{goal_values[r,c]:.2f}",
+                ha="center",
+                va="center"
+            )
+
+
+plt.tight_layout()
+plt.show()
