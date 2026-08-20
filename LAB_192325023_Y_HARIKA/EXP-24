@@ -1,0 +1,180 @@
+24) In an inventory management system, use Bellman’s equation to find the optimal policy for ordering stock. Implement this in Python and demonstrate how the optimal policy minimizes costs
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# -----------------------------------------
+# Inventory System Parameters
+# -----------------------------------------
+
+MAX_INVENTORY = 10
+MAX_ORDER = 5
+
+DEMANDS = [0, 1, 2, 3, 4]
+DEMAND_PROB = [0.05, 0.20, 0.35, 0.25, 0.15]
+
+ORDER_COST = 2
+HOLDING_COST = 1
+SHORTAGE_COST = 5
+
+GAMMA = 0.9
+
+THETA = 0.001
+
+
+# -----------------------------------------
+# Bellman Optimality Equation
+# -----------------------------------------
+
+def bellman_optimization():
+
+    # Value function
+    V = np.zeros(MAX_INVENTORY + 1)
+
+    # Optimal ordering policy
+    policy = np.zeros(MAX_INVENTORY + 1, dtype=int)
+
+    while True:
+
+        delta = 0
+
+        for inventory in range(MAX_INVENTORY + 1):
+
+            best_cost = float("inf")
+            best_order = 0
+
+            # Try every possible order quantity
+            for order in range(MAX_ORDER + 1):
+
+                # Inventory after ordering
+                available_inventory = min(
+                    inventory + order,
+                    MAX_INVENTORY
+                )
+
+                expected_cost = 0
+
+                # Consider every possible demand
+                for demand, probability in zip(
+                    DEMANDS,
+                    DEMAND_PROB
+                ):
+
+                    # Inventory remaining after demand
+                    remaining = available_inventory - demand
+
+                    # Shortage
+                    shortage = max(0, -remaining)
+
+                    # Actual inventory
+                    next_inventory = max(
+                        0,
+                        remaining
+                    )
+
+                    # Costs
+                    ordering_cost = (
+                        ORDER_COST
+                        if order > 0
+                        else 0
+                    )
+
+                    holding_cost = (
+                        HOLDING_COST *
+                        next_inventory
+                    )
+
+                    shortage_cost = (
+                        SHORTAGE_COST *
+                        shortage
+                    )
+
+                    immediate_cost = (
+                        ordering_cost +
+                        holding_cost +
+                        shortage_cost
+                    )
+
+                    expected_cost += probability * (
+                        immediate_cost +
+                        GAMMA * V[next_inventory]
+                    )
+
+                # Choose minimum expected cost
+                if expected_cost < best_cost:
+
+                    best_cost = expected_cost
+                    best_order = order
+
+            delta = max(
+                delta,
+                abs(V[inventory] - best_cost)
+            )
+
+            V[inventory] = best_cost
+            policy[inventory] = best_order
+
+        if delta < THETA:
+            break
+
+    return V, policy
+
+
+# -----------------------------------------
+# Calculate Optimal Policy
+# -----------------------------------------
+
+V, policy = bellman_optimization()
+
+
+# -----------------------------------------
+# Display Results
+# -----------------------------------------
+
+print("Inventory Level | Optimal Order | Minimum Cost")
+print("----------------------------------------------")
+
+for inventory in range(MAX_INVENTORY + 1):
+
+    print(
+        f"{inventory:^15} | "
+        f"{policy[inventory]:^13} | "
+        f"{V[inventory]:.2f}"
+    )
+
+
+# -----------------------------------------
+# Visualization
+# -----------------------------------------
+
+plt.figure(figsize=(10, 5))
+
+plt.plot(
+    range(MAX_INVENTORY + 1),
+    policy,
+    marker="o"
+)
+
+plt.xlabel("Current Inventory Level")
+plt.ylabel("Optimal Order Quantity")
+plt.title("Optimal Inventory Ordering Policy")
+plt.grid(True)
+
+plt.show()
+
+
+plt.figure(figsize=(10, 5))
+
+plt.plot(
+    range(MAX_INVENTORY + 1),
+    V,
+    marker="o"
+)
+
+plt.xlabel("Current Inventory Level")
+plt.ylabel("Minimum Expected Cost")
+plt.title("Value Function for Inventory Management")
+plt.grid(True)
+
+plt.show()
