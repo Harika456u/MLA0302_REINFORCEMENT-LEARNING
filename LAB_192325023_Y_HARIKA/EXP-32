@@ -1,0 +1,148 @@
+import random
+
+# EXPERIMENT 32
+# Ethical Decision Making using Reinforcement Learning
+
+ACTIONS = ["Safe", "Risky", "Harmful"]
+
+# Q-table
+Q = {
+    "Normal": [0.0, 0.0, 0.0],
+    "Sensitive": [0.0, 0.0, 0.0]
+}
+
+learning_rate = 0.1
+discount_factor = 0.9
+epsilon = 0.2
+
+episodes = 1000
+
+safe_count = 0
+harmful_count = 0
+unfair_count = 0
+total_reward = 0
+
+
+def choose_action(state):
+    # Exploration
+    if random.random() < epsilon:
+        return random.randint(0, 2)
+
+    # Exploitation
+    return Q[state].index(max(Q[state]))
+
+
+def get_reward(state, action):
+
+    # Safe action
+    if action == 0:
+        return 10
+
+    # Risky action
+    elif action == 1:
+        return 5
+
+    # Harmful action
+    else:
+        return -20
+
+
+def ethical_penalty(state, action):
+
+    # Penalize harmful actions
+    if action == 2:
+        return 30
+
+    # Fairness constraint:
+    # Sensitive states should prefer safe decisions
+    if state == "Sensitive" and action == 1:
+        return 10
+
+    return 0
+
+
+# Reinforcement learning
+for episode in range(episodes):
+
+    # Random environment state
+    if random.random() < 0.5:
+        state = "Normal"
+    else:
+        state = "Sensitive"
+
+    action = choose_action(state)
+
+    # Normal reward
+    reward = get_reward(state, action)
+
+    # Ethical penalty
+    penalty = ethical_penalty(state, action)
+
+    # Final ethical reward
+    final_reward = reward - penalty
+
+    # Q-learning update
+    old_q = Q[state][action]
+    max_next_q = max(Q[state])
+
+    Q[state][action] = old_q + learning_rate * (
+        final_reward +
+        discount_factor * max_next_q -
+        old_q
+    )
+
+
+# Evaluate trained system
+print("ETHICAL REINFORCEMENT LEARNING")
+print("------------------------------")
+
+for i in range(100):
+
+    state = random.choice(["Normal", "Sensitive"])
+    action = choose_action(state)
+
+    reward = get_reward(state, action)
+    penalty = ethical_penalty(state, action)
+
+    final_reward = reward - penalty
+
+    total_reward += final_reward
+
+    if action == 0:
+        safe_count += 1
+
+    if action == 2:
+        harmful_count += 1
+
+    if state == "Sensitive" and action != 0:
+        unfair_count += 1
+
+    print(
+        "Case:", i + 1,
+        "| State:", state,
+        "| Action:", ACTIONS[action],
+        "| Reward:", final_reward
+    )
+
+
+# Performance evaluation
+print("\nPERFORMANCE EVALUATION")
+print("----------------------")
+
+print("Safe Decisions       :", safe_count)
+print("Harmful Decisions    :", harmful_count)
+print("Unfair Decisions     :", unfair_count)
+print("Total Reward         :", total_reward)
+
+ethical_score = (
+    (safe_count - harmful_count - unfair_count)
+    / 100
+) * 100
+
+ethical_score = max(0, ethical_score)
+
+print("Ethical Performance  :", round(ethical_score, 2), "%")
+
+print("\nLearned Q-Values:")
+for state in Q:
+    print(state, ":", [round(x, 2) for x in Q[state]])
