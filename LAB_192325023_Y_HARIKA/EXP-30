@@ -1,0 +1,158 @@
+import numpy as np
+import random
+
+# Multi-Agent Reinforcement Learning
+# Simulation of autonomous robots performing a search task
+
+GRID_SIZE = 5
+NUM_ROBOTS = 3
+NUM_EPISODES = 100
+MAX_STEPS = 50
+
+# Target location
+TARGET = (4, 4)
+
+
+class Robot:
+    def __init__(self, robot_id):
+        self.robot_id = robot_id
+        self.position = [random.randint(0, GRID_SIZE - 1),
+                         random.randint(0, GRID_SIZE - 1)]
+
+        # Q-table: state -> actions
+        self.q_table = {}
+
+    def get_state(self):
+        return tuple(self.position)
+
+    def get_q_values(self, state):
+        if state not in self.q_table:
+            self.q_table[state] = np.zeros(4)
+        return self.q_table[state]
+
+    def choose_action(self, state, epsilon):
+        # Actions: 0=Up, 1=Down, 2=Left, 3=Right
+        if random.random() < epsilon:
+            return random.randint(0, 3)
+        return np.argmax(self.get_q_values(state))
+
+    def move(self, action):
+        if action == 0:       # Up
+            self.position[1] += 1
+        elif action == 1:     # Down
+            self.position[1] -= 1
+        elif action == 2:     # Left
+            self.position[0] -= 1
+        elif action == 3:     # Right
+            self.position[0] += 1
+
+        # Keep robot inside grid
+        self.position[0] = max(0, min(GRID_SIZE - 1, self.position[0]))
+        self.position[1] = max(0, min(GRID_SIZE - 1, self.position[1]))
+
+
+# Create robots
+robots = [Robot(i) for i in range(NUM_ROBOTS)]
+
+learning_rate = 0.1
+discount_factor = 0.9
+epsilon = 1.0
+epsilon_decay = 0.97
+epsilon_min = 0.05
+
+successful_episodes = 0
+total_steps = 0
+
+print("MULTI-AGENT REINFORCEMENT LEARNING")
+print("-----------------------------------")
+
+for episode in range(NUM_EPISODES):
+
+    # Reset robot positions
+    for robot in robots:
+        robot.position = [
+            random.randint(0, GRID_SIZE - 1),
+            random.randint(0, GRID_SIZE - 1)
+        ]
+
+    completed = False
+
+    for step in range(MAX_STEPS):
+
+        states = []
+        actions = []
+
+        # Each robot observes environment and chooses action
+        for robot in robots:
+            state = robot.get_state()
+            action = robot.choose_action(state, epsilon)
+
+            states.append(state)
+            actions.append(action)
+
+        # Robots perform actions
+        for i, robot in enumerate(robots):
+            robot.move(actions[i])
+
+        # Cooperative reward
+        robots_at_target = sum(
+            1 for robot in robots
+            if tuple(robot.position) == TARGET
+        )
+
+        if robots_at_target == NUM_ROBOTS:
+            reward = 100
+            completed = True
+        elif robots_at_target > 0:
+            reward = 10 * robots_at_target
+        else:
+            reward = -1
+
+        # Update Q-values
+        for i, robot in enumerate(robots):
+
+            old_state = states[i]
+            action = actions[i]
+            new_state = robot.get_state()
+
+            old_q = robot.get_q_values(old_state)[action]
+            max_next_q = np.max(robot.get_q_values(new_state))
+
+            new_q = old_q + learning_rate * (
+                reward +
+                discount_factor * max_next_q -
+                old_q
+            )
+
+            robot.get_q_values(old_state)[action] = new_q
+
+        if completed:
+            successful_episodes += 1
+            total_steps += step + 1
+            break
+
+    # Reduce exploration over time
+    epsilon = max(epsilon_min, epsilon * epsilon_decay)
+
+
+# Performance evaluation
+success_rate = (successful_episodes / NUM_EPISODES) * 100
+
+print("\nPERFORMANCE EVALUATION")
+print("----------------------")
+print("Number of Robots       :", NUM_ROBOTS)
+print("Number of Episodes     :", NUM_EPISODES)
+print("Successful Episodes    :", successful_episodes)
+print("Success Rate           :", round(success_rate, 2), "%")
+
+if successful_episodes > 0:
+    average_steps = total_steps / successful_episodes
+    print("Average Steps          :", round(average_steps, 2))
+else:
+    print("Average Steps          : No successful episode")
+
+print("\nFinal Robot Positions:")
+for robot in robots:
+    print("Robot", robot.robot_id + 1, ":", robot.position)
+
+print("\nMulti-agent task completed.")
