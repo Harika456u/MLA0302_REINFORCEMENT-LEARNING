@@ -1,0 +1,242 @@
+# EXPERIMENT 34
+# Reinforcement Learning for Sustainable Resource Management
+
+import random
+
+# Actions
+ACTIONS = ["Low Use", "Medium Use", "High Use"]
+
+# Resource states
+STATES = ["Low", "Medium", "High"]
+
+# Q-table
+Q = {}
+
+for state in STATES:
+    Q[state] = [0.0, 0.0, 0.0]
+
+# Learning parameters
+learning_rate = 0.1
+discount_factor = 0.9
+epsilon = 0.2
+
+EPISODES = 500
+
+# Performance variables
+total_reward = 0
+sustainable_steps = 0
+total_resource_used = 0
+total_cost = 0
+
+
+def choose_action(state):
+    # Exploration
+    if random.random() < epsilon:
+        return random.randint(0, 2)
+
+    # Exploitation
+    return Q[state].index(max(Q[state]))
+
+
+def get_resource_use(action):
+    if action == 0:
+        return 10
+    elif action == 1:
+        return 30
+    else:
+        return 50
+
+
+def calculate_reward(resource, action):
+
+    use = get_resource_use(action)
+
+    # Sustainable use
+    if resource == "High":
+        if action == 0:
+            return 10
+        elif action == 1:
+            return 15
+        else:
+            return 5
+
+    elif resource == "Medium":
+        if action == 0:
+            return 8
+        elif action == 1:
+            return 12
+        else:
+            return -10
+
+    # Low resource
+    else:
+        if action == 0:
+            return 10
+        elif action == 1:
+            return -10
+        else:
+            return -25
+
+
+def next_resource_level(resource, action):
+
+    use = get_resource_use(action)
+
+    if resource == "High":
+        level = 70 - use + random.randint(-5, 5)
+
+    elif resource == "Medium":
+        level = 50 - use + random.randint(-5, 5)
+
+    else:
+        level = 25 - use + random.randint(-5, 5)
+
+    # Determine next state
+    if level >= 60:
+        return "High"
+    elif level >= 30:
+        return "Medium"
+    else:
+        return "Low"
+
+
+# ------------------------------------------------
+# TRAINING PHASE
+# ------------------------------------------------
+
+for episode in range(EPISODES):
+
+    resource = random.choice(STATES)
+
+    for step in range(20):
+
+        # Select action
+        action = choose_action(resource)
+
+        # Calculate reward
+        reward = calculate_reward(resource, action)
+
+        # Find next state
+        new_resource = next_resource_level(
+            resource, action
+        )
+
+        # Q-learning update
+        old_q = Q[resource][action]
+        max_next_q = max(Q[new_resource])
+
+        Q[resource][action] = old_q + learning_rate * (
+            reward
+            + discount_factor * max_next_q
+            - old_q
+        )
+
+        resource = new_resource
+
+
+# ------------------------------------------------
+# EVALUATION PHASE
+# ------------------------------------------------
+
+print("SUSTAINABLE RESOURCE MANAGEMENT")
+print("--------------------------------")
+
+resource = "High"
+
+for step in range(50):
+
+    action = choose_action(resource)
+
+    use = get_resource_use(action)
+    reward = calculate_reward(resource, action)
+
+    # Update performance values
+    total_reward += reward
+    total_resource_used += use
+    total_cost += use * 0.5
+
+    if reward >= 8:
+        sustainable_steps += 1
+
+    new_resource = next_resource_level(
+        resource, action
+    )
+
+    print(
+        "Step:", step + 1,
+        "| Resource:", resource,
+        "| Action:", ACTIONS[action],
+        "| Usage:", use,
+        "| Reward:", reward,
+        "| Next:", new_resource
+    )
+
+    resource = new_resource
+
+
+# ------------------------------------------------
+# PERFORMANCE EVALUATION
+# ------------------------------------------------
+
+sustainability_rate = (
+    sustainable_steps / 50
+) * 100
+
+average_usage = total_resource_used / 50
+average_cost = total_cost / 50
+
+print("\nPERFORMANCE EVALUATION")
+print("----------------------")
+
+print("Total Steps          :", 50)
+print("Sustainable Steps    :", sustainable_steps)
+print(
+    "Sustainability Rate  :",
+    round(sustainability_rate, 2),
+    "%"
+)
+
+print(
+    "Average Resource Use :",
+    round(average_usage, 2)
+)
+
+print(
+    "Average Cost         :",
+    round(average_cost, 2)
+)
+
+print(
+    "Total Reward         :",
+    total_reward
+)
+
+
+# ------------------------------------------------
+# LEARNED POLICY
+# ------------------------------------------------
+
+print("\nLEARNED RESOURCE MANAGEMENT POLICY")
+print("----------------------------------")
+
+for state in STATES:
+
+    best_action = Q[state].index(
+        max(Q[state])
+    )
+
+    print(
+        "Resource Level:",
+        state,
+        "->",
+        ACTIONS[best_action]
+    )
+
+print("\nQ-VALUES")
+
+for state in STATES:
+    print(
+        state,
+        ":",
+        [round(value, 2) for value in Q[state]]
+    )
