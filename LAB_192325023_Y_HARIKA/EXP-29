@@ -1,0 +1,81 @@
+import numpy as np
+
+# Adaptive Control System using Meta-Learning
+
+class MetaLearningController:
+    def __init__(self):
+        # Initial controller parameters
+        self.Kp = 1.0
+        self.Ki = 0.1
+        self.learning_rate = 0.01
+
+    def control(self, error, integral_error):
+        # PI controller
+        return self.Kp * error + self.Ki * integral_error
+
+    def adapt(self, error, integral_error):
+        # Performance feedback
+        performance_error = abs(error)
+
+        # Meta-learning: update controller parameters
+        self.Kp += self.learning_rate * performance_error * abs(error)
+        self.Ki += self.learning_rate * performance_error * abs(integral_error)
+
+        # Limit parameters
+        self.Kp = min(self.Kp, 5.0)
+        self.Ki = min(self.Ki, 2.0)
+
+
+def simulate(condition, controller):
+    target = 10
+    system_output = 0
+    integral_error = 0
+    total_error = 0
+
+    # Different environmental conditions
+    if condition == "Normal":
+        disturbance = 0.5
+    elif condition == "High Load":
+        disturbance = 2.0
+    elif condition == "Low Load":
+        disturbance = -1.0
+    else:
+        disturbance = 0
+
+    for t in range(50):
+        error = target - system_output
+        integral_error += error
+
+        # Generate control signal
+        control_signal = controller.control(error, integral_error)
+
+        # System response
+        system_output += 0.1 * control_signal - disturbance * 0.02
+
+        # Calculate performance
+        total_error += abs(error)
+
+        # Adapt controller using feedback
+        controller.adapt(error, integral_error)
+
+    return system_output, total_error
+
+
+# Main program
+controller = MetaLearningController()
+
+conditions = ["Normal", "High Load", "Low Load"]
+
+print("META-LEARNING ADAPTIVE CONTROL SYSTEM")
+print("--------------------------------------")
+
+for condition in conditions:
+    output, error = simulate(condition, controller)
+
+    print("\nOperating Condition:", condition)
+    print("Final Output      :", round(output, 2))
+    print("Total Error       :", round(error, 2))
+    print("Adapted Kp        :", round(controller.Kp, 3))
+    print("Adapted Ki        :", round(controller.Ki, 3))
+
+print("\nAdaptation completed successfully.")
