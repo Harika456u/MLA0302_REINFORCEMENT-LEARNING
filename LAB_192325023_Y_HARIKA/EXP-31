@@ -1,0 +1,159 @@
+import numpy as np
+import random
+
+# EXPERIMENT 31
+# POMDP Based Autonomous Robot Navigation
+
+GRID_SIZE = 5
+NUM_EPISODES = 10
+MAX_STEPS = 30
+
+# Goal position
+GOAL = (4, 4)
+
+# Actions: Up, Down, Left, Right
+ACTIONS = {
+    0: (0, 1),
+    1: (0, -1),
+    2: (-1, 0),
+    3: (1, 0)
+}
+
+
+class Robot:
+    def __init__(self):
+        self.position = (0, 0)
+
+        # Belief state: probability of robot being at each position
+        self.belief = np.ones((GRID_SIZE, GRID_SIZE))
+        self.belief /= np.sum(self.belief)
+
+    def move(self, action):
+        dx, dy = ACTIONS[action]
+
+        x = self.position[0] + dx
+        y = self.position[1] + dy
+
+        # Keep robot inside the grid
+        x = max(0, min(GRID_SIZE - 1, x))
+        y = max(0, min(GRID_SIZE - 1, y))
+
+        self.position = (x, y)
+
+    def observe(self):
+        # Partial observation with sensor uncertainty
+        x, y = self.position
+
+        if random.random() < 0.8:
+            return (x, y)
+        else:
+            # Incorrect sensor observation
+            return (
+                random.randint(0, GRID_SIZE - 1),
+                random.randint(0, GRID_SIZE - 1)
+            )
+
+    def update_belief(self, observation):
+        # Belief update based on sensor observation
+        new_belief = np.zeros((GRID_SIZE, GRID_SIZE))
+
+        ox, oy = observation
+
+        for x in range(GRID_SIZE):
+            for y in range(GRID_SIZE):
+
+                # Sensor model
+                if (x, y) == (ox, oy):
+                    probability = 0.8
+                else:
+                    probability = 0.2 / (GRID_SIZE * GRID_SIZE - 1)
+
+                new_belief[x][y] = self.belief[x][y] * probability
+
+        # Normalize belief
+        total = np.sum(new_belief)
+
+        if total > 0:
+            self.belief = new_belief / total
+
+    def choose_action(self):
+        # Select action based on most probable position
+        estimated_position = np.unravel_index(
+            np.argmax(self.belief),
+            self.belief.shape
+        )
+
+        x, y = estimated_position
+
+        # Move toward goal
+        if x < GOAL[0]:
+            return 3       # Right
+        elif y < GOAL[1]:
+            return 0       # Up
+        elif x > GOAL[0]:
+            return 2       # Left
+        else:
+            return 1       # Down
+
+
+def run_simulation():
+    successful = 0
+    total_steps = 0
+
+    print("POMDP AUTONOMOUS ROBOT NAVIGATION")
+    print("----------------------------------")
+
+    for episode in range(NUM_EPISODES):
+
+        robot = Robot()
+
+        for step in range(MAX_STEPS):
+
+            # Select action using belief state
+            action = robot.choose_action()
+
+            # Robot performs action
+            robot.move(action)
+
+            # Get uncertain sensor observation
+            observation = robot.observe()
+
+            # Update belief state
+            robot.update_belief(observation)
+
+            # Check whether goal is reached
+            if robot.position == GOAL:
+                successful += 1
+                total_steps += step + 1
+                break
+
+        print(
+            "Episode", episode + 1,
+            "| Final Position:", robot.position,
+            "| Belief Estimate:",
+            np.unravel_index(
+                np.argmax(robot.belief),
+                robot.belief.shape
+            )
+        )
+
+    # Performance evaluation
+    success_rate = (successful / NUM_EPISODES) * 100
+
+    print("\nPERFORMANCE EVALUATION")
+    print("----------------------")
+    print("Total Episodes   :", NUM_EPISODES)
+    print("Successful Runs  :", successful)
+    print("Success Rate     :", round(success_rate, 2), "%")
+
+    if successful > 0:
+        print(
+            "Average Steps    :",
+            round(total_steps / successful, 2)
+        )
+    else:
+        print("Average Steps    : No successful runs")
+
+
+# Main program
+run_simulation()
