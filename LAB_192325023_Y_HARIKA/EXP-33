@@ -1,0 +1,151 @@
+import random
+
+# EXPERIMENT 33
+# Reinforcement Learning for Healthcare Management
+
+ACTIONS = ["Low Priority", "Medium Priority", "High Priority"]
+
+# Q-table
+Q = {
+    "Low": [0.0, 0.0, 0.0],
+    "Medium": [0.0, 0.0, 0.0],
+    "High": [0.0, 0.0, 0.0]
+}
+
+learning_rate = 0.1
+discount_factor = 0.9
+epsilon = 0.2
+
+EPISODES = 500
+
+total_reward = 0
+successful_patients = 0
+total_cost = 0
+total_waiting_time = 0
+
+
+def choose_action(state):
+    # Exploration
+    if random.random() < epsilon:
+        return random.randint(0, 2)
+
+    # Exploitation
+    return Q[state].index(max(Q[state]))
+
+
+def get_reward(state, action):
+
+    # High priority for high-risk patient
+    if state == "High" and action == 2:
+        return 20
+
+    # Medium priority for medium-risk patient
+    elif state == "Medium" and action == 1:
+        return 15
+
+    # Low priority for low-risk patient
+    elif state == "Low" and action == 0:
+        return 10
+
+    # Incorrect priority
+    else:
+        return -10
+
+
+def get_cost(action):
+    # Higher priority uses more resources
+    if action == 0:
+        return 2
+    elif action == 1:
+        return 4
+    else:
+        return 6
+
+
+# Training phase
+for episode in range(EPISODES):
+
+    # Generate patient condition
+    state = random.choice(["Low", "Medium", "High"])
+
+    # Select scheduling action
+    action = choose_action(state)
+
+    # Calculate reward and cost
+    reward = get_reward(state, action)
+    cost = get_cost(action)
+
+    # Final reward considers resource cost
+    final_reward = reward - cost
+
+    # Q-learning update
+    old_q = Q[state][action]
+    max_next_q = max(Q[state])
+
+    Q[state][action] = old_q + learning_rate * (
+        final_reward +
+        discount_factor * max_next_q -
+        old_q
+    )
+
+
+# Evaluation phase
+print("REINFORCEMENT LEARNING FOR HEALTHCARE MANAGEMENT")
+print("------------------------------------------------")
+
+for patient in range(100):
+
+    # Generate patient condition
+    state = random.choice(["Low", "Medium", "High"])
+
+    # Select learned policy
+    action = choose_action(state)
+
+    # Calculate reward and resource cost
+    reward = get_reward(state, action)
+    cost = get_cost(action)
+
+    # Simulate waiting time
+    waiting_time = random.randint(1, 10)
+
+    # Patient outcome
+    if reward > 0:
+        outcome = "Successful"
+        successful_patients += 1
+    else:
+        outcome = "Needs Attention"
+
+    total_reward += reward
+    total_cost += cost
+    total_waiting_time += waiting_time
+
+    print(
+        "Patient:", patient + 1,
+        "| Condition:", state,
+        "| Priority:", ACTIONS[action],
+        "| Outcome:", outcome
+    )
+
+
+# Performance evaluation
+success_rate = (successful_patients / 100) * 100
+average_cost = total_cost / 100
+average_waiting_time = total_waiting_time / 100
+
+print("\nPERFORMANCE EVALUATION")
+print("----------------------")
+print("Patients Evaluated     :", 100)
+print("Successful Outcomes    :", successful_patients)
+print("Success Rate           :", round(success_rate, 2), "%")
+print("Average Resource Cost  :", round(average_cost, 2))
+print("Average Waiting Time   :", round(average_waiting_time, 2))
+print("Total Reward           :", total_reward)
+
+print("\nLEARNED Q-VALUES")
+print("----------------")
+for state in Q:
+    print(
+        state,
+        ":",
+        [round(value, 2) for value in Q[state]]
+    )
